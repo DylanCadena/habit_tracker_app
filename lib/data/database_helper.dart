@@ -1,0 +1,127 @@
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+import '../models/habit.dart';
+
+class DatabaseHelper {
+  static final DatabaseHelper instance = DatabaseHelper._init();
+  static Database? _database;
+
+  DatabaseHelper._init();
+
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+    _database = await _initDB('habits.db');
+    return _database!;
+  }
+
+  Future<Database> _initDB(String filePath) async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, filePath);
+
+    // VERSIÓN 3 para el soporte de colores
+    return await openDatabase(
+      path,
+      version: 4,
+      onCreate: _createDB,
+      onUpgrade: _upgradeDB,
+    );
+  }
+
+  Future _createDB(Database db, int version) async {
+    await db.execute('''
+    CREATE TABLE habits (
+      id TEXT PRIMARY KEY,
+       name TEXT NOT NULL,
+       isCompleted INTEGER NOT NULL,
+       orderIndex INTEGER NOT NULL DEFAULT 0,
+       colorValue INTEGER NOT NULL DEFAULT 4289552163,
+      iconCode INTEGER NOT NULL DEFAULT 58876
+)
+    ''');
+
+    await db.execute('''
+    CREATE TABLE stats (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      streak INTEGER NOT NULL,
+      lastDate TEXT NOT NULL,
+      lastStreakDate TEXT NOT NULL DEFAULT ''
+    )
+    ''');
+
+    await db.insert('stats', {
+      'id': 1,
+      'streak': 0,
+      'lastDate': '',
+      'lastStreakDate': '',
+    });
+  }
+
+  Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(
+        'ALTER TABLE habits ADD COLUMN orderIndex INTEGER NOT NULL DEFAULT 0',
+      );
+      await db.execute(
+        'ALTER TABLE stats ADD COLUMN lastStreakDate TEXT NOT NULL DEFAULT ""',
+      );
+    }
+    // Nueva migración para añadir el color a las tareas existentes
+    if (oldVersion < 3) {
+      await db.execute(
+        'ALTER TABLE habits ADD COLUMN colorValue INTEGER NOT NULL DEFAULT 4289552163',
+      );
+      if (oldVersion < 4) { // <-- NUEVA MIGRACIÓN
+      await db.execute('ALTER TABLE habits ADD COLUMN iconCode INTEGER NOT NULL DEFAULT 58876');
+  }
+    }
+  }
+
+  Future<List<Habit>> readAllHabits() async {
+    final db = await instance.database;
+    final result = await db.query('habits', orderBy: 'orderIndex ASC');
+    return result.map((json) => Habit.fromMap(json)).toList();
+  }
+
+  Future<void> insertHabit(Habit habit) async {
+    final db = await instance.database;
+    await db.insert(
+      'habits',
+      habit.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> updateHabit(Habit habit) async {
+    final db = await instance.database;
+    await db.update(
+      'habits',
+      habit.toMap(),
+      where: 'id = ?',
+      whereArgs: [habit.id],
+    );
+  }
+
+  Future<void> updateAllHabitsStatus(bool isCompleted) async {
+    final db = await instance.database;
+    await db.update('habits', {'isCompleted': isCompleted ? 1 : 0});
+  }
+
+  Future<Map<String, dynamic>> getStats() async {
+    final db = await instance.database;
+    final result = await db.query('stats', where: 'id = 1');
+    return result.first;
+  }
+
+  Future<void> updateStats(
+    int streak,
+    String lastDate,
+    String lastStreakDate,
+  ) async {
+    final db = await instance.database;
+    await db.update('stats', {
+      'streak': streak,
+      'lastDate': lastDate,
+      'lastStreakDate': lastStreakDate,
+    }, where: 'id = 1');
+  }
+}
