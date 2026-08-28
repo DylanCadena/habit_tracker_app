@@ -20,8 +20,8 @@ class DatabaseHelper {
 
     // SUBIMOS VERSIÓN A 5
     return await openDatabase(
-      path, 
-      version: 5, 
+      path,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -39,7 +39,7 @@ class DatabaseHelper {
       groupId TEXT NOT NULL DEFAULT ''
     )
     ''');
-    
+
     await db.execute('''
     CREATE TABLE habit_groups (
       id TEXT PRIMARY KEY,
@@ -47,7 +47,7 @@ class DatabaseHelper {
       orderIndex INTEGER NOT NULL DEFAULT 0
     )
     ''');
-    
+
     await db.execute('''
     CREATE TABLE stats (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -57,23 +57,38 @@ class DatabaseHelper {
     )
     ''');
 
-    await db.insert('stats', {'id': 1, 'streak': 0, 'lastDate': '', 'lastStreakDate': ''});
+    await db.insert('stats', {
+      'id': 1,
+      'streak': 0,
+      'lastDate': '',
+      'lastStreakDate': '',
+    });
   }
 
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      await db.execute('ALTER TABLE habits ADD COLUMN orderIndex INTEGER NOT NULL DEFAULT 0');
-      await db.execute('ALTER TABLE stats ADD COLUMN lastStreakDate TEXT NOT NULL DEFAULT ""');
+      await db.execute(
+        'ALTER TABLE habits ADD COLUMN orderIndex INTEGER NOT NULL DEFAULT 0',
+      );
+      await db.execute(
+        'ALTER TABLE stats ADD COLUMN lastStreakDate TEXT NOT NULL DEFAULT ""',
+      );
     }
     if (oldVersion < 3) {
-      await db.execute('ALTER TABLE habits ADD COLUMN colorValue INTEGER NOT NULL DEFAULT 4289552163');
+      await db.execute(
+        'ALTER TABLE habits ADD COLUMN colorValue INTEGER NOT NULL DEFAULT 4289552163',
+      );
     }
     if (oldVersion < 4) {
-      await db.execute('ALTER TABLE habits ADD COLUMN iconCode INTEGER NOT NULL DEFAULT 58876');
+      await db.execute(
+        'ALTER TABLE habits ADD COLUMN iconCode INTEGER NOT NULL DEFAULT 58876',
+      );
     }
     if (oldVersion < 5) {
       // MIGRACIÓN VERSIÓN 5: Añadimos tabla de grupos y la referencia en los hábitos
-      await db.execute('ALTER TABLE habits ADD COLUMN groupId TEXT NOT NULL DEFAULT ""');
+      await db.execute(
+        'ALTER TABLE habits ADD COLUMN groupId TEXT NOT NULL DEFAULT ""',
+      );
       await db.execute('''
       CREATE TABLE habit_groups (
         id TEXT PRIMARY KEY,
@@ -93,7 +108,11 @@ class DatabaseHelper {
 
   Future<void> insertGroup(HabitGroup group) async {
     final db = await instance.database;
-    await db.insert('habit_groups', group.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert(
+      'habit_groups',
+      group.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<void> updateGroup(HabitGroup group) async {
@@ -106,6 +125,11 @@ class DatabaseHelper {
     );
   }
 
+  Future<void> deleteGroup(String id) async {
+    final db = await instance.database;
+    await db.delete('habit_groups', where: 'id = ?', whereArgs: [id]);
+  }
+
   // --- MÉTODOS PARA HÁBITOS (se mantienen iguales) ---
   Future<List<Habit>> readAllHabits() async {
     final db = await instance.database;
@@ -115,12 +139,26 @@ class DatabaseHelper {
 
   Future<void> insertHabit(Habit habit) async {
     final db = await instance.database;
-    await db.insert('habits', habit.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert(
+      'habits',
+      habit.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<void> updateHabit(Habit habit) async {
     final db = await instance.database;
-    await db.update('habits', habit.toMap(), where: 'id = ?', whereArgs: [habit.id]);
+    await db.update(
+      'habits',
+      habit.toMap(),
+      where: 'id = ?',
+      whereArgs: [habit.id],
+    );
+  }
+
+  Future<void> deleteHabit(String id) async {
+    final db = await instance.database;
+    await db.delete('habits', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> updateAllHabitsStatus(bool isCompleted) async {
@@ -134,12 +172,16 @@ class DatabaseHelper {
     return result.first;
   }
 
-  Future<void> updateStats(int streak, String lastDate, String lastStreakDate) async {
+  Future<void> updateStats(
+    int streak,
+    String lastDate,
+    String lastStreakDate,
+  ) async {
     final db = await instance.database;
     await db.update('stats', {
-      'streak': streak, 
+      'streak': streak,
       'lastDate': lastDate,
-      'lastStreakDate': lastStreakDate
+      'lastStreakDate': lastStreakDate,
     }, where: 'id = 1');
   }
 }

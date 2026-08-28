@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:confetti/confetti.dart';
 import 'dart:math';
 import 'providers/habit_provider.dart';
+import 'models/habit.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 void main() {
@@ -306,13 +307,28 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
               if (_isEditMode)
-                IconButton(
-                  icon: const Icon(
-                    Icons.palette,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                  onPressed: () => _showColorPicker(context, habit),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Cambiar color',
+                      icon: const Icon(
+                        Icons.palette,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                      onPressed: () => _showColorPicker(context, habit),
+                    ),
+                    IconButton(
+                      tooltip: 'Eliminar hábito',
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.redAccent,
+                        size: 28,
+                      ),
+                      onPressed: () => _confirmDeleteHabit(context, habit),
+                    ),
+                  ],
                 )
               else
                 GestureDetector(
@@ -492,116 +508,123 @@ class _HomeScreenState extends State<HomeScreen> {
                       (oldIndex, newIndex) =>
                           provider.reorderHabitsInGroup('', oldIndex, newIndex),
                     ),
-                    ...provider.groups.map((group) {
-                      final groupIndex = provider.groups.indexOf(group);
-                      final groupHabits = provider.habits
-                          .where((habit) => habit.groupId == group.id)
-                          .toList();
+                    ReorderableListView(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      buildDefaultDragHandles: false,
+                      onReorder: provider.moveGroup,
+                      children: provider.groups.map((group) {
+                        final groupIndex = provider.groups.indexOf(group);
+                        final groupHabits = provider.habits
+                            .where((habit) => habit.groupId == group.id)
+                            .toList();
 
-                      if (groupHabits.isEmpty && !_isEditMode) {
-                        return const SizedBox.shrink();
-                      }
+                        if (groupHabits.isEmpty && !_isEditMode) {
+                          return SizedBox(
+                            key: ValueKey('group_${group.id}_empty'),
+                            child: const SizedBox.shrink(),
+                          );
+                        }
 
-                      final isExpanded = _expandedGroups[group.id] ?? true;
+                        final isExpanded = _expandedGroups[group.id] ?? true;
 
-                      return Container(
-                        key: ValueKey('group_${group.id}'),
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF24242A),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Column(
-                          children: [
-                            InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: () => setState(() {
-                                _expandedGroups[group.id] = !isExpanded;
-                              }),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 12,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      isExpanded
-                                          ? Icons.keyboard_arrow_up
-                                          : Icons.keyboard_arrow_down,
-                                      color: Colors.white70,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        group.name,
-                                        style: GoogleFonts.quicksand(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.blueAccent,
-                                        ),
-                                      ),
-                                    ),
-                                    if (_isEditMode) ...[
-                                      IconButton(
-                                        tooltip: 'Subir grupo',
-                                        onPressed: groupIndex == 0
-                                            ? null
-                                            : () => provider.moveGroup(
-                                                groupIndex,
-                                                groupIndex - 1,
-                                              ),
-                                        icon: const Icon(
-                                          Icons.arrow_upward,
-                                          size: 18,
-                                        ),
+                        return Container(
+                          key: ValueKey('group_${group.id}'),
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF24242A),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Column(
+                            children: [
+                              InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: () => setState(() {
+                                  _expandedGroups[group.id] = !isExpanded;
+                                }),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isExpanded
+                                            ? Icons.keyboard_arrow_up
+                                            : Icons.keyboard_arrow_down,
                                         color: Colors.white70,
-                                        disabledColor: Colors.white24,
-                                        visualDensity: VisualDensity.compact,
                                       ),
-                                      IconButton(
-                                        tooltip: 'Bajar grupo',
-                                        onPressed:
-                                            groupIndex ==
-                                                provider.groups.length - 1
-                                            ? null
-                                            : () => provider.moveGroup(
-                                                groupIndex,
-                                                groupIndex + 1,
-                                              ),
-                                        icon: const Icon(
-                                          Icons.arrow_downward,
-                                          size: 18,
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          group.name,
+                                          style: GoogleFonts.quicksand(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.blueAccent,
+                                          ),
                                         ),
-                                        color: Colors.white70,
-                                        disabledColor: Colors.white24,
-                                        visualDensity: VisualDensity.compact,
                                       ),
+                                      if (_isEditMode) ...[
+                                        ReorderableDragStartListener(
+                                          index: groupIndex,
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(8),
+                                            child: Icon(
+                                              Icons.drag_indicator,
+                                              color: Colors.white70,
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Editar grupo',
+                                          onPressed: () => _showEditGroupDialog(
+                                            context,
+                                            group,
+                                          ),
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            color: Colors.white70,
+                                          ),
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Eliminar grupo',
+                                          onPressed: () => _confirmDeleteGroup(
+                                            context,
+                                            group,
+                                          ),
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.redAccent,
+                                          ),
+                                        ),
+                                      ],
                                     ],
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
-                            if (isExpanded)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: buildHabitList(
-                                  groupHabits,
-                                  (oldIndex, newIndex) =>
-                                      provider.reorderHabitsInGroup(
-                                        group.id,
-                                        oldIndex,
-                                        newIndex,
-                                      ),
+                              if (isExpanded)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: buildHabitList(
+                                    groupHabits,
+                                    (oldIndex, newIndex) =>
+                                        provider.reorderHabitsInGroup(
+                                          group.id,
+                                          oldIndex,
+                                          newIndex,
+                                        ),
+                                  ),
                                 ),
-                              ),
-                          ],
-                        ),
-                      );
-                    }),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ],
                 ),
 
@@ -687,16 +710,92 @@ class _HomeScreenState extends State<HomeScreen> {
     final controller = TextEditingController();
     final selectedHabitIds = <String>[];
     var showNameError = false;
+    var controllerDisposed = false;
 
     try {
       final result = await showDialog<List<Object>>(
         context: context,
-        builder: (context) => StatefulBuilder(
-          builder: (context, setStateDialog) {
-            final mediaQuery = MediaQuery.of(context);
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setStateDialog) {
+            final mediaQuery = MediaQuery.of(dialogContext);
             final availableHeight =
-                mediaQuery.size.height - mediaQuery.viewInsets.bottom - 180;
-            final dialogHeight = availableHeight.clamp(220.0, 420.0);
+                mediaQuery.size.height - mediaQuery.viewInsets.bottom - 220;
+            final dialogHeight = availableHeight.clamp(160.0, 360.0);
+            final freeHabits = provider.habits
+                .where((habit) => habit.groupId.isEmpty)
+                .toList();
+            final occupiedHabits = provider.habits
+                .where((habit) => habit.groupId.isNotEmpty)
+                .toList();
+
+            Widget buildHabitOption(Habit habit) {
+              final isSelected = selectedHabitIds.contains(habit.id);
+              String currentGroupName = '';
+              for (final group in provider.groups) {
+                if (group.id == habit.groupId) {
+                  currentGroupName = group.name;
+                  break;
+                }
+              }
+
+              return CheckboxListTile(
+                activeColor: Colors.blueAccent,
+                checkColor: Colors.white,
+                title: Text(
+                  habit.name,
+                  style: GoogleFonts.quicksand(color: Colors.white),
+                ),
+                subtitle: currentGroupName.isEmpty
+                    ? null
+                    : Text(
+                        'Actualmente en: $currentGroupName',
+                        style: const TextStyle(
+                          color: Colors.orangeAccent,
+                          fontSize: 12,
+                        ),
+                      ),
+                value: isSelected,
+                onChanged: (value) async {
+                  if (value == true && habit.groupId.isNotEmpty) {
+                    final confirm = await showDialog<bool>(
+                      context: dialogContext,
+                      builder: (confirmContext) => AlertDialog(
+                        backgroundColor: Colors.grey[900],
+                        title: const Text(
+                          'Mover hábito',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        content: Text(
+                          'Este hábito ya pertenece a "$currentGroupName". ¿Quieres moverlo al nuevo grupo?',
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(confirmContext, false),
+                            child: const Text('Cancelar'),
+                          ),
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(confirmContext, true),
+                            child: const Text('Mover'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm != true) return;
+                  }
+
+                  setStateDialog(() {
+                    if (value == true) {
+                      selectedHabitIds.add(habit.id);
+                    } else {
+                      selectedHabitIds.remove(habit.id);
+                    }
+                  });
+                },
+              );
+            }
 
             return AlertDialog(
               backgroundColor: const Color(0xFF2C2C2C),
@@ -737,83 +836,32 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 8),
                     Expanded(
-                      child: ListView.builder(
-                        itemCount: provider.habits.length,
-                        itemBuilder: (context, index) {
-                          final habit = provider.habits[index];
-                          final isSelected = selectedHabitIds.contains(
-                            habit.id,
-                          );
-                          String currentGroupName = '';
-                          if (habit.groupId.isNotEmpty) {
-                            for (final group in provider.groups) {
-                              if (group.id == habit.groupId) {
-                                currentGroupName = group.name;
-                                break;
-                              }
-                            }
-                          }
-
-                          return CheckboxListTile(
-                            activeColor: Colors.blueAccent,
-                            checkColor: Colors.white,
-                            title: Text(
-                              habit.name,
-                              style: GoogleFonts.quicksand(color: Colors.white),
+                      child: ListView(
+                        children: [
+                          if (freeHabits.isEmpty)
+                            const ListTile(
+                              title: Text(
+                                'No hay hábitos libres',
+                                style: TextStyle(color: Colors.white54),
+                              ),
                             ),
-                            subtitle: currentGroupName.isEmpty
-                                ? null
-                                : Text(
-                                    'Actualmente en: $currentGroupName',
-                                    style: const TextStyle(
-                                      color: Colors.orangeAccent,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                            value: isSelected,
-                            onChanged: (value) async {
-                              if (value == true && habit.groupId.isNotEmpty) {
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (dialogContext) => AlertDialog(
-                                    backgroundColor: Colors.grey[900],
-                                    title: const Text(
-                                      'Mover hábito',
-                                      style: TextStyle(color: Colors.white),
-                                    ),
-                                    content: Text(
-                                      'Este hábito ya pertenece a "$currentGroupName". ¿Quieres moverlo al nuevo grupo?',
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                      ),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(dialogContext, false),
-                                        child: const Text('Cancelar'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(dialogContext, true),
-                                        child: const Text('Mover'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (confirm != true) return;
-                              }
-
-                              setStateDialog(() {
-                                if (value == true) {
-                                  selectedHabitIds.add(habit.id);
-                                } else {
-                                  selectedHabitIds.remove(habit.id);
-                                }
-                              });
-                            },
-                          );
-                        },
+                          ...freeHabits.map(buildHabitOption),
+                          if (occupiedHabits.isNotEmpty)
+                            ExpansionTile(
+                              collapsedIconColor: Colors.white70,
+                              iconColor: Colors.white,
+                              title: Text(
+                                'Hábitos en otros grupos (${occupiedHabits.length})',
+                                style: GoogleFonts.quicksand(
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              children: occupiedHabits
+                                  .map(buildHabitOption)
+                                  .toList(),
+                            ),
+                        ],
                       ),
                     ),
                   ],
@@ -821,7 +869,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => Navigator.pop(dialogContext),
                   child: Text(
                     'Cancelar',
                     style: GoogleFonts.quicksand(color: Colors.white54),
@@ -834,7 +882,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       setStateDialog(() => showNameError = true);
                       return;
                     }
-                    Navigator.pop(context, <Object>[
+                    FocusScope.of(dialogContext).unfocus();
+                    Navigator.pop(dialogContext, <Object>[
                       name,
                       List<String>.from(selectedHabitIds),
                     ]);
@@ -846,8 +895,6 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         ),
       );
-      controller.dispose();
-
       if (result == null) return;
       setState(() => _isCreatingGroup = true);
       await Future<void>.delayed(Duration.zero);
@@ -855,13 +902,242 @@ class _HomeScreenState extends State<HomeScreen> {
         result[0] as String,
         result[1] as List<String>,
       );
-      if (mounted) setState(() {});
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      controller.dispose();
+      controllerDisposed = true;
     } finally {
+      if (!controllerDisposed) {
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        controller.dispose();
+      }
       if (mounted) setState(() => _isCreatingGroup = false);
     }
   }
 
   // --- LOS MÉTODOS _showColorPicker y _showAddOrEditDialog VAN AQUÍ ABAJO ---
+
+  Future<void> _showEditGroupDialog(
+    BuildContext context,
+    HabitGroup group,
+  ) async {
+    final provider = context.read<HabitProvider>();
+    final controller = TextEditingController(text: group.name);
+    final selectedHabitIds = provider.habits
+        .where((habit) => habit.groupId == group.id)
+        .map((habit) => habit.id)
+        .toSet();
+    var showNameError = false;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            final freeHabits = provider.habits
+                .where(
+                  (habit) => habit.groupId.isEmpty || habit.groupId == group.id,
+                )
+                .toList();
+            final occupiedHabits = provider.habits
+                .where(
+                  (habit) =>
+                      habit.groupId.isNotEmpty && habit.groupId != group.id,
+                )
+                .toList();
+
+            Widget habitOption(Habit habit) {
+              final selected = selectedHabitIds.contains(habit.id);
+              return CheckboxListTile(
+                activeColor: Colors.blueAccent,
+                checkColor: Colors.white,
+                title: Text(
+                  habit.name,
+                  style: GoogleFonts.quicksand(color: Colors.white),
+                ),
+                value: selected,
+                onChanged: (value) async {
+                  if (value == true && habit.groupId.isNotEmpty) {
+                    final move = await showDialog<bool>(
+                      context: dialogContext,
+                      builder: (confirmContext) => AlertDialog(
+                        backgroundColor: Colors.grey[900],
+                        title: const Text(
+                          'Mover hábito',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        content: const Text(
+                          'Este hábito pertenece a otro grupo. ¿Quieres moverlo aquí?',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(confirmContext, false),
+                            child: const Text('Cancelar'),
+                          ),
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(confirmContext, true),
+                            child: const Text('Mover'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (move != true) return;
+                  }
+                  setDialogState(() {
+                    if (value == true) {
+                      selectedHabitIds.add(habit.id);
+                    } else {
+                      selectedHabitIds.remove(habit.id);
+                    }
+                  });
+                },
+              );
+            }
+
+            final availableHeight =
+                MediaQuery.of(dialogContext).size.height -
+                MediaQuery.of(dialogContext).viewInsets.bottom -
+                220;
+            final dialogHeight = availableHeight.clamp(160.0, 360.0);
+
+            return AlertDialog(
+              backgroundColor: const Color(0xFF2C2C2C),
+              title: Text(
+                'Editar grupo',
+                style: GoogleFonts.quicksand(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: dialogHeight,
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: controller,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Nombre del grupo',
+                        errorText: showNameError ? 'Escribe un nombre' : null,
+                        hintStyle: const TextStyle(color: Colors.white38),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: ListView(
+                        children: [
+                          ...freeHabits.map(habitOption),
+                          if (occupiedHabits.isNotEmpty)
+                            ExpansionTile(
+                              title: Text(
+                                'Hábitos en otros grupos (${occupiedHabits.length})',
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                              children: occupiedHabits
+                                  .map(habitOption)
+                                  .toList(),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final name = controller.text.trim();
+                    if (name.isEmpty) {
+                      setDialogState(() => showNameError = true);
+                      return;
+                    }
+                    FocusScope.of(dialogContext).unfocus();
+                    Navigator.pop(dialogContext);
+                    await provider.updateGroupContents(
+                      group.id,
+                      name,
+                      selectedHabitIds.toList(),
+                    );
+                  },
+                  child: const Text('Guardar'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      controller.dispose();
+    }
+  }
+
+  Future<bool> _confirmDeletion(
+    BuildContext context, {
+    required String title,
+    required String message,
+  }) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF2C2C2C),
+            title: Text(title, style: const TextStyle(color: Colors.white)),
+            content: Text(
+              message,
+              style: const TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                ),
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Eliminar'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _confirmDeleteHabit(BuildContext context, dynamic habit) async {
+    final habitProvider = context.read<HabitProvider>();
+    final confirmed = await _confirmDeletion(
+      context,
+      title: 'Eliminar hábito',
+      message:
+          '¿Quieres eliminar "${habit.name}"? Esta acción no se puede deshacer.',
+    );
+    if (confirmed && mounted) {
+      await habitProvider.deleteHabit(habit.id);
+    }
+  }
+
+  Future<void> _confirmDeleteGroup(
+    BuildContext context,
+    HabitGroup group,
+  ) async {
+    final habitProvider = context.read<HabitProvider>();
+    final confirmed = await _confirmDeletion(
+      context,
+      title: 'Eliminar grupo',
+      message: '¿Eliminar "${group.name}"? Sus hábitos quedarán sin grupo.',
+    );
+    if (confirmed && mounted) {
+      await habitProvider.deleteGroup(group.id);
+    }
+  }
 
   void _showColorPicker(BuildContext context, var habit) {
     // (Mantén el mismo código de _showColorPicker del paso anterior)

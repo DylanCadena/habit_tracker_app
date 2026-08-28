@@ -119,16 +119,10 @@ class HabitProvider with ChangeNotifier {
         .toList();
     if (oldIndex < 0 || oldIndex >= groupHabits.length) return;
     if (newIndex > oldIndex) newIndex -= 1;
-    if (newIndex < 0 || newIndex >= groupHabits.length) return;
+    if (newIndex < 0 || newIndex > groupHabits.length - 1) return;
 
     final habit = groupHabits.removeAt(oldIndex);
     groupHabits.insert(newIndex, habit);
-    var groupPosition = 0;
-    for (final item in _habits) {
-      if (item.groupId == groupId) {
-        item.orderIndex = groupPosition++;
-      }
-    }
 
     final positions = <int>[];
     for (var index = 0; index < _habits.length; index++) {
@@ -137,15 +131,17 @@ class HabitProvider with ChangeNotifier {
     for (var index = 0; index < positions.length; index++) {
       _habits[positions[index]] = groupHabits[index];
     }
-    for (final item in _habits) {
-      await DatabaseHelper.instance.updateHabit(item);
+    for (var index = 0; index < _habits.length; index++) {
+      _habits[index].orderIndex = index;
+      await DatabaseHelper.instance.updateHabit(_habits[index]);
     }
     notifyListeners();
   }
 
   Future<void> moveGroup(int oldIndex, int newIndex) async {
     if (oldIndex < 0 || oldIndex >= _groups.length) return;
-    if (newIndex < 0 || newIndex >= _groups.length) return;
+    if (newIndex > oldIndex) newIndex -= 1;
+    if (newIndex < 0 || newIndex > _groups.length - 1) return;
 
     final group = _groups.removeAt(oldIndex);
     _groups.insert(newIndex, group);
@@ -153,6 +149,28 @@ class HabitProvider with ChangeNotifier {
       _groups[index].orderIndex = index;
       await DatabaseHelper.instance.updateGroup(_groups[index]);
     }
+    notifyListeners();
+  }
+
+  Future<void> deleteHabit(String id) async {
+    final index = _habits.indexWhere((habit) => habit.id == id);
+    if (index == -1) return;
+
+    _habits.removeAt(index);
+    await DatabaseHelper.instance.deleteHabit(id);
+    notifyListeners();
+  }
+
+  Future<void> deleteGroup(String id) async {
+    final groupIndex = _groups.indexWhere((group) => group.id == id);
+    if (groupIndex == -1) return;
+
+    for (final habit in _habits.where((habit) => habit.groupId == id)) {
+      habit.groupId = '';
+      await DatabaseHelper.instance.updateHabit(habit);
+    }
+    _groups.removeAt(groupIndex);
+    await DatabaseHelper.instance.deleteGroup(id);
     notifyListeners();
   }
 
@@ -188,11 +206,35 @@ class HabitProvider with ChangeNotifier {
       }
 
       _groups.add(newGroup);
+      notifyListeners();
       return true;
     } catch (e) {
       debugPrint("Error guardando grupo: $e");
       return false;
     }
+  }
+
+  Future<void> updateGroupContents(
+    String groupId,
+    String name,
+    List<String> selectedHabitIds,
+  ) async {
+    final groupIndex = _groups.indexWhere((group) => group.id == groupId);
+    if (groupIndex == -1) return;
+
+    final selectedIds = selectedHabitIds.toSet();
+    for (final habit in _habits) {
+      if (selectedIds.contains(habit.id)) {
+        habit.groupId = groupId;
+      } else if (habit.groupId == groupId) {
+        habit.groupId = '';
+      }
+      await DatabaseHelper.instance.updateHabit(habit);
+    }
+
+    _groups[groupIndex].name = name;
+    await DatabaseHelper.instance.updateGroup(_groups[groupIndex]);
+    notifyListeners();
   }
 
   // 3. Función para cambiar de grupo un hábito individual (si decides hacerlo desde edición)
