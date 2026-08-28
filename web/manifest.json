@@ -1,11 +1,11 @@
 {
-    "name": "habit_app",
-    "short_name": "habit_app",
+    "name": "Streakify",
+    "short_name": "Streakify",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Habit tracking app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

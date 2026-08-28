@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "habit_app" "\0"
+            VALUE "FileDescription", "Streakify" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "habit_app" "\0"
+            VALUE "InternalName", "Streakify" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "habit_app.exe" "\0"
-            VALUE "ProductName", "habit_app" "\0"
+            VALUE "OriginalFilename", "Streakify.exe" "\0"
+            VALUE "ProductName", "Streakify" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
