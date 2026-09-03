@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:confetti/confetti.dart';
 import 'dart:math';
@@ -32,6 +33,11 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Streakify',
       supportedLocales: const [Locale('es'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       localeResolutionCallback: (locale, supportedLocales) {
         return locale?.languageCode.toLowerCase() == 'es'
             ? const Locale('es')
