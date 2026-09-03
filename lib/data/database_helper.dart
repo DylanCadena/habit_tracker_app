@@ -132,6 +132,66 @@ class DatabaseHelper {
     await db.delete('habit_groups', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> createGroupWithHabits(
+    HabitGroup group,
+    List<Habit> habits,
+  ) async {
+    final db = await instance.database;
+    await db.transaction((transaction) async {
+      await transaction.insert('habit_groups', group.toMap());
+      for (final habit in habits) {
+        await transaction.update(
+          'habits',
+          habit.toMap(),
+          where: 'id = ?',
+          whereArgs: [habit.id],
+        );
+      }
+    });
+  }
+
+  Future<void> updateGroupWithHabits(
+    HabitGroup group,
+    List<Habit> habits,
+  ) async {
+    final db = await instance.database;
+    await db.transaction((transaction) async {
+      for (final habit in habits) {
+        await transaction.update(
+          'habits',
+          habit.toMap(),
+          where: 'id = ?',
+          whereArgs: [habit.id],
+        );
+      }
+      await transaction.update(
+        'habit_groups',
+        group.toMap(),
+        where: 'id = ?',
+        whereArgs: [group.id],
+      );
+    });
+  }
+
+  Future<void> deleteGroupWithHabits(String groupId, List<Habit> habits) async {
+    final db = await instance.database;
+    await db.transaction((transaction) async {
+      for (final habit in habits) {
+        await transaction.update(
+          'habits',
+          habit.toMap(),
+          where: 'id = ?',
+          whereArgs: [habit.id],
+        );
+      }
+      await transaction.delete(
+        'habit_groups',
+        where: 'id = ?',
+        whereArgs: [groupId],
+      );
+    });
+  }
+
   Future<List<Habit>> readAllHabits() async {
     final db = await instance.database;
     final result = await db.query('habits', orderBy: 'orderIndex ASC, id ASC');

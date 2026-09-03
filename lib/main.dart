@@ -10,8 +10,18 @@ import 'services/notification_service.dart';
 import 'l10n/app_strings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+final appNavigatorKey = GlobalKey<NavigatorState>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  NotificationService.instance.onNotificationTap = (_) {
+    final navigator = appNavigatorKey.currentState;
+    if (navigator == null) return;
+    navigator.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      (route) => false,
+    );
+  };
   try {
     await NotificationService.instance.initialize();
   } catch (error) {
@@ -31,6 +41,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: appNavigatorKey,
       title: 'Streakify',
       supportedLocales: const [Locale('es'), Locale('en')],
       localizationsDelegates: const [
@@ -289,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    Widget buildHabitCard(dynamic habit, int index) {
+    Widget buildHabitCard(Habit habit, int index) {
       final cardColor = Color(habit.colorValue);
       final habitIcon = IconData(habit.iconCode, fontFamily: 'MaterialIcons');
 
@@ -443,7 +454,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     Widget buildHabitList(
-      List<dynamic> habits,
+      List<Habit> habits,
       Future<void> Function(int, int) onReorder,
     ) {
       if (habits.isEmpty) return const SizedBox.shrink();
@@ -1208,7 +1219,7 @@ class _HomeScreenState extends State<HomeScreen> {
         false;
   }
 
-  Future<void> _confirmDeleteHabit(BuildContext context, dynamic habit) async {
+  Future<void> _confirmDeleteHabit(BuildContext context, Habit habit) async {
     final strings = stringsOf(context);
     final habitProvider = context.read<HabitProvider>();
     final confirmed = await _confirmDeletion(
@@ -1237,7 +1248,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _showColorPicker(BuildContext context, var habit) {
+  void _showColorPicker(BuildContext context, Habit habit) {
     final strings = stringsOf(context);
     // (Mantén el mismo código de _showColorPicker del paso anterior)
     showDialog(
@@ -1286,108 +1297,54 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showAddOrEditDialog(BuildContext context, {var habit}) {
+  Future<void> _showAddOrEditDialog(
+    BuildContext context, {
+    Habit? habit,
+  }) async {
     final strings = stringsOf(context);
     final controller = TextEditingController(text: habit?.name ?? '');
     final isEditing = habit != null;
     int selectedIconCode = habit?.iconCode ?? Icons.star_rounded.codePoint;
     String selectedGroupId = habit?.groupId ?? '';
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        // Usamos StatefulBuilder para poder actualizar la selección de iconos dentro del diálogo sin cerrar
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            final dialogHeight = MediaQuery.sizeOf(context).height * 0.58;
-            return AlertDialog(
-              backgroundColor: const Color(0xFF2C2C2C),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              title: Text(
-                isEditing ? strings.editHabit : strings.newHabit,
-                style: GoogleFonts.quicksand(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          // Usamos StatefulBuilder para poder actualizar la selección de iconos dentro del diálogo sin cerrar
+          return StatefulBuilder(
+            builder: (context, setStateDialog) {
+              final dialogHeight = MediaQuery.sizeOf(context).height * 0.58;
+              return AlertDialog(
+                backgroundColor: const Color(0xFF2C2C2C),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
                 ),
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
-                height: dialogHeight,
-                child: ListView(
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  children: [
-                    TextField(
-                      controller: controller,
-                      style: GoogleFonts.quicksand(
-                        color: Colors.white,
-                        fontSize: 18,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: strings.habitNameHint,
-                        hintStyle: GoogleFonts.quicksand(color: Colors.white38),
-                        filled: true,
-                        fillColor: Colors.black26,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
+                title: Text(
+                  isEditing ? strings.editHabit : strings.newHabit,
+                  style: GoogleFonts.quicksand(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  height: dialogHeight,
+                  child: ListView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    children: [
+                      TextField(
+                        controller: controller,
+                        style: GoogleFonts.quicksand(
+                          color: Colors.white,
+                          fontSize: 18,
                         ),
-                      ),
-                      autofocus: true,
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      strings.chooseIcon,
-                      style: GoogleFonts.quicksand(color: Colors.white70),
-                    ),
-                    const SizedBox(height: 12),
-                    GridView.count(
-                      crossAxisCount: 4,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 1,
-                      children: _availableIcons.map((iconData) {
-                        final isSelected =
-                            selectedIconCode == iconData.codePoint;
-                        return GestureDetector(
-                          onTap: () => setStateDialog(
-                            () => selectedIconCode = iconData.codePoint,
-                          ),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? Colors.blueAccent
-                                  : Colors.black26,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              iconData,
-                              color: isSelected ? Colors.white : Colors.white54,
-                              size: 28,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    if (isEditing &&
-                        context.read<HabitProvider>().groups.isNotEmpty) ...[
-                      const SizedBox(height: 24),
-                      Text(
-                        strings.groupName,
-                        style: GoogleFonts.quicksand(color: Colors.white70),
-                      ),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedGroupId,
-                        dropdownColor: const Color(0xFF3A3A3A),
-                        style: GoogleFonts.quicksand(color: Colors.white),
                         decoration: InputDecoration(
+                          hintText: strings.habitNameHint,
+                          hintStyle: GoogleFonts.quicksand(
+                            color: Colors.white38,
+                          ),
                           filled: true,
                           fillColor: Colors.black26,
                           border: OutlineInputBorder(
@@ -1395,93 +1352,158 @@ class _HomeScreenState extends State<HomeScreen> {
                             borderSide: BorderSide.none,
                           ),
                         ),
-                        items: [
-                          DropdownMenuItem<String>(
-                            value: '',
-                            child: Text(strings.noGroup),
-                          ),
-                          ...context.read<HabitProvider>().groups.map(
-                            (group) => DropdownMenuItem<String>(
-                              value: group.id,
-                              child: Text(group.name),
+                        autofocus: true,
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        strings.chooseIcon,
+                        style: GoogleFonts.quicksand(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 12),
+                      GridView.count(
+                        crossAxisCount: 4,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 1,
+                        children: _availableIcons.map((iconData) {
+                          final isSelected =
+                              selectedIconCode == iconData.codePoint;
+                          return GestureDetector(
+                            onTap: () => setStateDialog(
+                              () => selectedIconCode = iconData.codePoint,
+                            ),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? Colors.blueAccent
+                                    : Colors.black26,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                iconData,
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.white54,
+                                size: 28,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      if (isEditing &&
+                          context.read<HabitProvider>().groups.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        Text(
+                          strings.groupName,
+                          style: GoogleFonts.quicksand(color: Colors.white70),
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedGroupId,
+                          dropdownColor: const Color(0xFF3A3A3A),
+                          style: GoogleFonts.quicksand(color: Colors.white),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.black26,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
                             ),
                           ),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            setStateDialog(() => selectedGroupId = value);
-                          }
-                        },
-                      ),
+                          items: [
+                            DropdownMenuItem<String>(
+                              value: '',
+                              child: Text(strings.noGroup),
+                            ),
+                            ...context.read<HabitProvider>().groups.map(
+                              (group) => DropdownMenuItem<String>(
+                                value: group.id,
+                                child: Text(group.name),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setStateDialog(() => selectedGroupId = value);
+                            }
+                          },
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(
-                    strings.cancel,
-                    style: GoogleFonts.quicksand(
-                      color: Colors.white54,
-                      fontWeight: FontWeight.bold,
-                    ),
                   ),
                 ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      strings.cancel,
+                      style: GoogleFonts.quicksand(
+                        color: Colors.white54,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                  onPressed: () async {
-                    final habitProvider = context.read<HabitProvider>();
-                    final navigator = Navigator.of(context);
-                    if (controller.text.isNotEmpty) {
-                      if (isEditing) {
-                        await habitProvider.editHabit(
-                          habit.id,
-                          controller.text,
-                          selectedIconCode,
-                        );
-                        if (selectedGroupId != habit.groupId) {
-                          await habitProvider.updateHabitGroup(
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                    ),
+                    onPressed: () async {
+                      final habitProvider = context.read<HabitProvider>();
+                      final navigator = Navigator.of(context);
+                      if (controller.text.isNotEmpty) {
+                        if (isEditing) {
+                          await habitProvider.editHabit(
                             habit.id,
-                            selectedGroupId,
+                            controller.text,
+                            selectedIconCode,
+                          );
+                          if (selectedGroupId != habit.groupId) {
+                            await habitProvider.updateHabitGroup(
+                              habit.id,
+                              selectedGroupId,
+                            );
+                          }
+                        } else {
+                          final randomColor =
+                              _cardColors[Random().nextInt(_cardColors.length)]
+                                  .toARGB32();
+                          await habitProvider.addHabit(
+                            controller.text,
+                            selectedIconCode,
+                            colorValue: randomColor,
                           );
                         }
-                      } else {
-                        final randomColor =
-                            _cardColors[Random().nextInt(_cardColors.length)]
-                                .toARGB32();
-                        await habitProvider.addHabit(
-                          controller.text,
-                          selectedIconCode,
-                          colorValue: randomColor,
-                        );
+                        navigator.pop();
                       }
-                      navigator.pop();
-                    }
-                  },
-                  child: Text(
-                    strings.save,
-                    style: GoogleFonts.quicksand(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                    },
+                    child: Text(
+                      strings.save,
+                      style: GoogleFonts.quicksand(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 }

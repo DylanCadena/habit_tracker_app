@@ -8,6 +8,7 @@ class HabitProvider with ChangeNotifier {
   int _streak = 0;
   String _lastStreakDate = '';
   late final Future<void> _initialization;
+  Future<void> _toggleQueue = Future<void>.value();
 
   List<Habit> get habits => _habits;
   int get streak => _streak;
@@ -81,12 +82,10 @@ class HabitProvider with ChangeNotifier {
       iconCode: iconCode,
       colorValue: colorValue ?? 0xFFBA55D3,
     );
-    _habits.add(newHabit);
-
-    notifyListeners();
-
     try {
       await DatabaseHelper.instance.insertHabit(newHabit);
+      _habits.add(newHabit);
+      notifyListeners();
       await _syncNotifications();
     } catch (e) {
       debugPrint("Error guardando en DB: $e");
@@ -100,13 +99,13 @@ class HabitProvider with ChangeNotifier {
 
     final index = _habits.indexWhere((h) => h.id == id);
     if (index != -1) {
-      _habits[index].name = trimmedName;
-      _habits[index].iconCode = iconCode;
-
-      notifyListeners();
-
       try {
-        await DatabaseHelper.instance.updateHabit(_habits[index]);
+        final updatedHabit = _habits[index].copy()
+          ..name = trimmedName
+          ..iconCode = iconCode;
+        await DatabaseHelper.instance.updateHabit(updatedHabit);
+        _habits[index] = updatedHabit;
+        notifyListeners();
         await _syncNotifications();
       } catch (e) {
         debugPrint("Error actualizando en DB: $e");
@@ -114,7 +113,13 @@ class HabitProvider with ChangeNotifier {
     }
   }
 
-  Future<void> toggleHabit(String id) async {
+  Future<void> toggleHabit(String id) {
+    final operation = _toggleQueue.then((_) => _toggleHabit(id));
+    _toggleQueue = operation.catchError((_) {});
+    return operation;
+  }
+
+  Future<void> _toggleHabit(String id) async {
     await _waitForInitialization();
     final today = DateTime.now().toIso8601String().split('T')[0];
     final stats = await DatabaseHelper.instance.getStats();
@@ -126,8 +131,10 @@ class HabitProvider with ChangeNotifier {
     final index = _habits.indexWhere((h) => h.id == id);
     if (index != -1) {
       final wasCompleted = _habits[index].isCompleted;
-      _habits[index].isCompleted = !wasCompleted;
-      await DatabaseHelper.instance.updateHabit(_habits[index]);
+      final updatedHabit = _habits[index].copy()..isCompleted = !wasCompleted;
+      final previousStreak = _streak;
+      final previousStreakDate = _lastStreakDate;
+      _habits[index] = updatedHabit;
 
       if (!wasCompleted) {
         if (allCompleted && _lastStreakDate != today) {
@@ -144,26 +151,38 @@ class HabitProvider with ChangeNotifier {
             : yesterday.toIso8601String().split('T')[0];
       }
 
-      await DatabaseHelper.instance.updateStats(
-        _streak,
-        today,
-        _lastStreakDate,
-      );
-      await _syncNotifications();
-      notifyListeners();
+      try {
+        await DatabaseHelper.instance.updateHabit(updatedHabit);
+        await DatabaseHelper.instance.updateStats(
+          _streak,
+          today,
+          _lastStreakDate,
+        );
+        await _syncNotifications();
+        notifyListeners();
+      } catch (_) {
+        _habits[index] = _habits[index].copy()..isCompleted = wasCompleted;
+        _streak = previousStreak;
+        _lastStreakDate = previousStreakDate;
+        rethrow;
+      }
     }
   }
 
   Future<void> reorderHabits(int oldIndex, int newIndex) async {
     await _waitForInitialization();
+    if (oldIndex < 0 || oldIndex >= _habits.length) return;
     if (newIndex > oldIndex) newIndex -= 1;
-    final item = _habits.removeAt(oldIndex);
-    _habits.insert(newIndex, item);
+    if (newIndex < 0 || newIndex >= _habits.length) return;
+    final reorderedHabits = List<Habit>.from(_habits);
+    final item = reorderedHabits.removeAt(oldIndex);
+    reorderedHabits.insert(newIndex, item);
 
-    for (int i = 0; i < _habits.length; i++) {
-      _habits[i].orderIndex = i;
+    for (int i = 0; i < reorderedHabits.length; i++) {
+      reorderedHabits[i].orderIndex = i;
     }
-    await DatabaseHelper.instance.updateHabitOrder(_habits);
+    await DatabaseHelper.instance.updateHabitOrder(reorderedHabits);
+    _habits = reorderedHabits;
     notifyListeners();
   }
 
@@ -184,16 +203,18 @@ class HabitProvider with ChangeNotifier {
     groupHabits.insert(newIndex, habit);
 
     final positions = <int>[];
-    for (var index = 0; index < _habits.length; index++) {
-      if (_habits[index].groupId == groupId) positions.add(index);
+    final reorderedHabits = List<Habit>.from(_habits);
+    for (var index = 0; index < reorderedHabits.length; index++) {
+      if (reorderedHabits[index].groupId == groupId) positions.add(index);
     }
     for (var index = 0; index < positions.length; index++) {
-      _habits[positions[index]] = groupHabits[index];
+      reorderedHabits[positions[index]] = groupHabits[index];
     }
-    for (var index = 0; index < _habits.length; index++) {
-      _habits[index].orderIndex = index;
+    for (var index = 0; index < reorderedHabits.length; index++) {
+      reorderedHabits[index].orderIndex = index;
     }
-    await DatabaseHelper.instance.updateHabitOrder(_habits);
+    await DatabaseHelper.instance.updateHabitOrder(reorderedHabits);
+    _habits = reorderedHabits;
     notifyListeners();
   }
 
@@ -203,12 +224,14 @@ class HabitProvider with ChangeNotifier {
     if (newIndex > oldIndex) newIndex -= 1;
     if (newIndex < 0 || newIndex > _groups.length - 1) return;
 
-    final group = _groups.removeAt(oldIndex);
-    _groups.insert(newIndex, group);
-    for (var index = 0; index < _groups.length; index++) {
-      _groups[index].orderIndex = index;
+    final reorderedGroups = List<HabitGroup>.from(_groups);
+    final group = reorderedGroups.removeAt(oldIndex);
+    reorderedGroups.insert(newIndex, group);
+    for (var index = 0; index < reorderedGroups.length; index++) {
+      reorderedGroups[index].orderIndex = index;
     }
-    await DatabaseHelper.instance.updateGroupOrder(_groups);
+    await DatabaseHelper.instance.updateGroupOrder(reorderedGroups);
+    _groups = reorderedGroups;
     notifyListeners();
   }
 
@@ -217,8 +240,13 @@ class HabitProvider with ChangeNotifier {
     final index = _habits.indexWhere((habit) => habit.id == id);
     if (index == -1) return;
 
-    _habits.removeAt(index);
-    await DatabaseHelper.instance.deleteHabit(id);
+    final removedHabit = _habits.removeAt(index);
+    try {
+      await DatabaseHelper.instance.deleteHabit(id);
+    } catch (error) {
+      _habits.insert(index, removedHabit);
+      rethrow;
+    }
     await _syncNotifications();
     notifyListeners();
   }
@@ -228,12 +256,16 @@ class HabitProvider with ChangeNotifier {
     final groupIndex = _groups.indexWhere((group) => group.id == id);
     if (groupIndex == -1) return;
 
-    for (final habit in _habits.where((habit) => habit.groupId == id)) {
-      habit.groupId = '';
-      await DatabaseHelper.instance.updateHabit(habit);
+    final affectedHabits = _habits
+        .where((habit) => habit.groupId == id)
+        .map((habit) => habit.copy()..groupId = '')
+        .toList();
+    await DatabaseHelper.instance.deleteGroupWithHabits(id, affectedHabits);
+    for (final updatedHabit in affectedHabits) {
+      final index = _habits.indexWhere((habit) => habit.id == updatedHabit.id);
+      _habits[index] = updatedHabit;
     }
     _groups.removeAt(groupIndex);
-    await DatabaseHelper.instance.deleteGroup(id);
     notifyListeners();
   }
 
@@ -241,8 +273,9 @@ class HabitProvider with ChangeNotifier {
     await _waitForInitialization();
     final index = _habits.indexWhere((h) => h.id == id);
     if (index != -1) {
-      _habits[index].colorValue = newColor;
-      await DatabaseHelper.instance.updateHabit(_habits[index]);
+      final updatedHabit = _habits[index].copy()..colorValue = newColor;
+      await DatabaseHelper.instance.updateHabit(updatedHabit);
+      _habits[index] = updatedHabit;
       notifyListeners();
     }
   }
@@ -261,16 +294,23 @@ class HabitProvider with ChangeNotifier {
       orderIndex: _groups.length,
     );
 
-    try {
-      await DatabaseHelper.instance.insertGroup(newGroup);
-      for (var habitId in selectedHabitIds) {
-        final index = _habits.indexWhere((h) => h.id == habitId);
-        if (index != -1) {
-          _habits[index].groupId = newGroup.id;
-          await DatabaseHelper.instance.updateHabit(_habits[index]);
-        }
+    final updatedHabits = <Habit>[];
+    for (final habitId in selectedHabitIds) {
+      final index = _habits.indexWhere((h) => h.id == habitId);
+      if (index != -1) {
+        updatedHabits.add(_habits[index].copy()..groupId = newGroup.id);
       }
+    }
 
+    try {
+      await DatabaseHelper.instance.createGroupWithHabits(
+        newGroup,
+        updatedHabits,
+      );
+      for (final updatedHabit in updatedHabits) {
+        final index = _habits.indexWhere((h) => h.id == updatedHabit.id);
+        _habits[index] = updatedHabit;
+      }
       _groups.add(newGroup);
       notifyListeners();
       return true;
@@ -292,17 +332,24 @@ class HabitProvider with ChangeNotifier {
     if (groupIndex == -1) return;
 
     final selectedIds = selectedHabitIds.toSet();
+    final updatedHabits = <Habit>[];
     for (final habit in _habits) {
+      final updatedHabit = habit.copy();
       if (selectedIds.contains(habit.id)) {
-        habit.groupId = groupId;
+        updatedHabit.groupId = groupId;
       } else if (habit.groupId == groupId) {
-        habit.groupId = '';
+        updatedHabit.groupId = '';
       }
-      await DatabaseHelper.instance.updateHabit(habit);
+      updatedHabits.add(updatedHabit);
     }
 
-    _groups[groupIndex].name = trimmedName;
-    await DatabaseHelper.instance.updateGroup(_groups[groupIndex]);
+    final updatedGroup = _groups[groupIndex].copy()..name = trimmedName;
+    await DatabaseHelper.instance.updateGroupWithHabits(
+      updatedGroup,
+      updatedHabits,
+    );
+    _habits = updatedHabits;
+    _groups[groupIndex] = updatedGroup;
     notifyListeners();
   }
 
@@ -310,9 +357,10 @@ class HabitProvider with ChangeNotifier {
     await _waitForInitialization();
     final index = _habits.indexWhere((h) => h.id == habitId);
     if (index != -1) {
-      _habits[index].groupId = newGroupId;
+      final updatedHabit = _habits[index].copy()..groupId = newGroupId;
+      await DatabaseHelper.instance.updateHabit(updatedHabit);
+      _habits[index] = updatedHabit;
       notifyListeners();
-      await DatabaseHelper.instance.updateHabit(_habits[index]);
     }
   }
 }

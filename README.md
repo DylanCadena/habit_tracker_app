@@ -1,17 +1,29 @@
-# habit_app
+# Streakify
 
-A new Flutter project.
+Aplicacion Flutter para seguimiento de habitos diarios.
 
-## Getting Started
+## Desarrollo
 
-This project is a starting point for a Flutter application.
+```powershell
+flutter pub get
+flutter analyze
+flutter run
+```
 
-A few resources to get you started if this is your first Flutter project:
+Los datos se guardan localmente en SQLite. Las notificaciones requieren permiso
+del sistema y se programan para las 12:00 y las 20:00.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## APK de pruebas
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```powershell
+flutter build apk --release --no-tree-shake-icons
+```
+
+El resultado queda en `build/app/outputs/flutter-apk/app-release.apk`.
+
+## Firma para publicar
+
+El paquete Android es `com.streakify.app`. Para publicar se debe configurar una
+keystore privada y sustituir la firma debug de `android/app/build.gradle.kts`
+por una configuracion release. No se deben guardar la keystore ni las
+credenciales en el repositorio.

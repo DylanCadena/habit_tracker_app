@@ -5,6 +5,8 @@ class HabitGroup {
 
   HabitGroup({required this.id, required this.name, this.orderIndex = 0});
 
+  HabitGroup copy() => HabitGroup(id: id, name: name, orderIndex: orderIndex);
+
   Map<String, dynamic> toMap() => {
     'id': id,
     'name': name,
@@ -36,6 +38,16 @@ class Habit {
     this.iconCode = 0xe5fc,
     this.groupId = '', // Vacío significa que no tiene grupo
   });
+
+  Habit copy() => Habit(
+    id: id,
+    name: name,
+    isCompleted: isCompleted,
+    orderIndex: orderIndex,
+    colorValue: colorValue,
+    iconCode: iconCode,
+    groupId: groupId,
+  );
 
   Map<String, dynamic> toMap() => {
     'id': id,

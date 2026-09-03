@@ -16,6 +16,7 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
+  void Function(String? payload)? onNotificationTap;
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -38,7 +39,12 @@ class NotificationService {
       macOS: darwinSettings,
     );
 
-    await _plugin.initialize(settings: settings);
+    await _plugin.initialize(
+      settings: settings,
+      onDidReceiveNotificationResponse: (response) {
+        onNotificationTap?.call(response.payload);
+      },
+    );
     _initialized = true;
   }
 
@@ -60,9 +66,8 @@ class NotificationService {
           MacOSFlutterLocalNotificationsPlugin
         >()
         ?.requestPermissions(alert: true, badge: true, sound: true);
-    granted = androidGranted != false &&
-        iosGranted != false &&
-        macosGranted != false;
+    granted =
+        androidGranted != false && iosGranted != false && macosGranted != false;
     return granted;
   }
 
@@ -128,13 +133,9 @@ class NotificationService {
       scheduledDate: scheduled,
       notificationDetails: details,
       title: _isSpanish ? 'Hábitos pendientes' : 'Pending habits',
-      body: pendingCount == 1
-          ? (_isSpanish
-                ? 'Aún tienes 1 hábito por completar.'
-                : 'You still have 1 habit to complete.')
-          : (_isSpanish
-                ? 'Aún tienes $pendingCount hábitos por completar.'
-                : 'You still have $pendingCount habits to complete.'),
+      body: _isSpanish
+          ? 'Aún tienes hábitos por completar.'
+          : 'You still have habits to complete.',
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time,
       payload: 'open_habits',
