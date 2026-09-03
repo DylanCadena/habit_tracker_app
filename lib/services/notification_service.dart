@@ -42,23 +42,28 @@ class NotificationService {
     _initialized = true;
   }
 
-  Future<void> requestPermissions() async {
+  Future<bool> requestPermissions() async {
     await initialize();
-    await _plugin
+    var granted = true;
+    final androidGranted = await _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.requestNotificationsPermission();
-    await _plugin
+    final iosGranted = await _plugin
         .resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin
         >()
         ?.requestPermissions(alert: true, badge: true, sound: true);
-    await _plugin
+    final macosGranted = await _plugin
         .resolvePlatformSpecificImplementation<
           MacOSFlutterLocalNotificationsPlugin
         >()
         ?.requestPermissions(alert: true, badge: true, sound: true);
+    granted = androidGranted != false &&
+        iosGranted != false &&
+        macosGranted != false;
+    return granted;
   }
 
   Future<void> syncForPendingHabits(int pendingCount) async {

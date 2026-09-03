@@ -30,6 +30,17 @@ class AppStrings {
   String get cancel => isSpanish ? 'Cancelar' : 'Cancel';
   String get move => isSpanish ? 'Mover' : 'Move';
   String get save => isSpanish ? 'Guardar' : 'Save';
+  String get notificationPermissionTitle => isSpanish
+      ? 'Activar recordatorios'
+      : 'Enable reminders';
+  String get notificationPermissionMessage => isSpanish
+      ? 'Permite las notificaciones para recibir recordatorios de tus hábitos pendientes.'
+      : 'Allow notifications to receive reminders about your pending habits.';
+  String get notificationPermissionLater => isSpanish ? 'Ahora no' : 'Not now';
+  String get notificationPermissionAllow => isSpanish ? 'Activar' : 'Allow';
+  String get notificationPermissionSettings => isSpanish
+      ? 'Puedes activar las notificaciones en Ajustes.'
+      : 'You can enable notifications in Settings.';
   String get createGroup => isSpanish ? 'Crear Grupo' : 'Create Group';
   String get selectHabits =>
       isSpanish ? 'Selecciona los hábitos:' : 'Select habits:';

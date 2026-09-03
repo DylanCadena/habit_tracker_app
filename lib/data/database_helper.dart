@@ -101,7 +101,10 @@ class DatabaseHelper {
 
   Future<List<HabitGroup>> readAllGroups() async {
     final db = await instance.database;
-    final result = await db.query('habit_groups', orderBy: 'orderIndex ASC');
+    final result = await db.query(
+      'habit_groups',
+      orderBy: 'orderIndex ASC, id ASC',
+    );
     return result.map((json) => HabitGroup.fromMap(json)).toList();
   }
 
@@ -131,7 +134,7 @@ class DatabaseHelper {
 
   Future<List<Habit>> readAllHabits() async {
     final db = await instance.database;
-    final result = await db.query('habits', orderBy: 'orderIndex ASC');
+    final result = await db.query('habits', orderBy: 'orderIndex ASC, id ASC');
     return result.map((json) => Habit.fromMap(json)).toList();
   }
 
@@ -167,7 +170,16 @@ class DatabaseHelper {
   Future<Map<String, dynamic>> getStats() async {
     final db = await instance.database;
     final result = await db.query('stats', where: 'id = 1');
-    return result.first;
+    if (result.isNotEmpty) return result.first;
+
+    final defaultStats = {
+      'id': 1,
+      'streak': 0,
+      'lastDate': '',
+      'lastStreakDate': '',
+    };
+    await db.insert('stats', defaultStats);
+    return defaultStats;
   }
 
   Future<void> updateStats(

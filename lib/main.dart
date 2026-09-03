@@ -7,12 +7,12 @@ import 'models/habit.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'services/notification_service.dart';
 import 'l10n/app_strings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await NotificationService.instance.initialize();
-    await NotificationService.instance.requestPermissions();
   } catch (error) {
     debugPrint('Notification setup failed: $error');
   }
@@ -157,6 +157,56 @@ class _HomeScreenState extends State<HomeScreen> {
     _confettiController = ConfettiController(
       duration: const Duration(seconds: 2),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _requestNotificationPermissionIfNeeded();
+    });
+  }
+
+  Future<void> _requestNotificationPermissionIfNeeded() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (preferences.getBool('notification_permission_prompt_shown') == true ||
+          !mounted) {
+        return;
+      }
+
+      final strings = stringsOf(context);
+      final allow = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(strings.notificationPermissionTitle),
+          content: Text(strings.notificationPermissionMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(strings.notificationPermissionLater),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(strings.notificationPermissionAllow),
+            ),
+          ],
+        ),
+      );
+
+      await preferences.setBool('notification_permission_prompt_shown', true);
+      if (!mounted) return;
+
+      if (allow != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(strings.notificationPermissionSettings)),
+        );
+        return;
+      }
+
+      final granted = await NotificationService.instance.requestPermissions();
+      if (!mounted || granted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(strings.notificationPermissionSettings)),
+      );
+    } catch (error) {
+      debugPrint('Notification permission flow failed: $error');
+    }
   }
 
   @override
@@ -237,10 +287,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final cardColor = Color(habit.colorValue);
       final habitIcon = IconData(habit.iconCode, fontFamily: 'MaterialIcons');
 
-      return AnimatedContainer(
+      return Container(
         key: ValueKey(habit.id),
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
           color: cardColor.withValues(
