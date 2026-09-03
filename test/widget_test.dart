@@ -22,7 +22,7 @@ void main() {
       ),
     );
     await tester.pump(const Duration(seconds: 2));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('Racha actual: '), findsOneWidget);
     expect(find.byIcon(Icons.add_rounded), findsOneWidget);
@@ -36,18 +36,18 @@ void main() {
       ChangeNotifierProvider(create: (_) => provider, child: const MyApp()),
     );
     await tester.pump(const Duration(seconds: 2));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     await provider.addHabit('Hábito de prueba', Icons.star.codePoint);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
 
     await tester.tap(find.byIcon(Icons.edit_rounded));
     await tester.pump();
     await tester.tap(find.text('Nuevo Grupo'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.enterText(find.byType(TextField), 'Grupo de prueba');
     await tester.tap(find.text('Hábito de prueba'));
     await tester.tap(find.text('Guardar'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(tester.takeException(), isNull);
     expect(find.text('Grupo de prueba'), findsOneWidget);

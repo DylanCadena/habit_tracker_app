@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/habit.dart';
 import '../data/database_helper.dart';
+import '../services/notification_service.dart';
 
 class HabitProvider with ChangeNotifier {
   List<Habit> _habits = [];
   int _streak = 0;
   String _lastStreakDate = '';
+  late final Future<void> _initialization;
 
   List<Habit> get habits => _habits;
   int get streak => _streak;
@@ -13,7 +15,7 @@ class HabitProvider with ChangeNotifier {
       _habits.isNotEmpty && _habits.every((h) => h.isCompleted);
 
   HabitProvider() {
-    loadData();
+    _initialization = loadData();
   }
 
   Future<void> loadData() async {
@@ -23,57 +25,89 @@ class HabitProvider with ChangeNotifier {
 
     _streak = stats['streak'] as int;
     final String lastDate = stats['lastDate'] as String;
-    final String lastStreakDate = stats['lastStreakDate'] as String;
-    _lastStreakDate = lastStreakDate;
+    _lastStreakDate = stats['lastStreakDate'] as String;
 
     final today = DateTime.now().toIso8601String().split('T')[0];
 
-    // Un nuevo día reinicia las casillas, pero la racha se actualiza al completar el día.
-    if (lastDate != today && lastDate.isNotEmpty) {
-      for (var habit in _habits) {
-        habit.isCompleted = false;
+    if (_lastStreakDate.isNotEmpty) {
+      final streakDate = DateTime.tryParse(_lastStreakDate);
+      final todayDate = DateTime.parse(today);
+      final daysSinceStreak = streakDate == null
+          ? null
+          : todayDate.difference(streakDate).inDays;
+      if (daysSinceStreak == null || daysSinceStreak > 1) {
+        _streak = 0;
+        _lastStreakDate = '';
+        await DatabaseHelper.instance.updateStats(_streak, today, '');
       }
-      await DatabaseHelper.instance.updateAllHabitsStatus(false);
-      await DatabaseHelper.instance.updateStats(_streak, today, lastStreakDate);
-    } else if (lastDate.isEmpty) {
-      await DatabaseHelper.instance.updateStats(_streak, today, lastStreakDate);
     }
+
+    await _refreshDay(lastDate, today);
+    await _syncNotifications();
 
     notifyListeners();
   }
 
+  Future<void> _syncNotifications() async {
+    final pendingCount = _habits.where((habit) => !habit.isCompleted).length;
+    try {
+      await NotificationService.instance.syncForPendingHabits(pendingCount);
+    } catch (error) {
+      debugPrint('Notification sync failed: $error');
+    }
+  }
+
+  Future<void> _refreshDay(String lastDate, String today) async {
+    if (lastDate == today) return;
+
+    for (var habit in _habits) {
+      habit.isCompleted = false;
+    }
+    await DatabaseHelper.instance.updateAllHabitsStatus(false);
+    await DatabaseHelper.instance.updateStats(_streak, today, _lastStreakDate);
+  }
+
+  Future<void> _waitForInitialization() => _initialization;
+
   Future<void> addHabit(String name, int iconCode, {int? colorValue}) async {
+    await _waitForInitialization();
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) return;
+
     final newHabit = Habit(
       id: DateTime.now().toString(),
-      name: name,
+      name: trimmedName,
       orderIndex: _habits.length,
       iconCode: iconCode,
       colorValue: colorValue ?? 0xFFBA55D3,
     );
     _habits.add(newHabit);
 
-    // 1. Primero actualizamos la pantalla INMEDIATAMENTE
     notifyListeners();
 
-    // 2. Luego intentamos guardarlo en la base de datos
     try {
       await DatabaseHelper.instance.insertHabit(newHabit);
+      await _syncNotifications();
     } catch (e) {
       debugPrint("Error guardando en DB: $e");
     }
   }
 
   Future<void> editHabit(String id, String newName, int iconCode) async {
+    await _waitForInitialization();
+    final trimmedName = newName.trim();
+    if (trimmedName.isEmpty) return;
+
     final index = _habits.indexWhere((h) => h.id == id);
     if (index != -1) {
-      _habits[index].name = newName;
+      _habits[index].name = trimmedName;
       _habits[index].iconCode = iconCode;
 
-      // Actualizamos la pantalla al instante
       notifyListeners();
 
       try {
         await DatabaseHelper.instance.updateHabit(_habits[index]);
+        await _syncNotifications();
       } catch (e) {
         debugPrint("Error actualizando en DB: $e");
       }
@@ -81,23 +115,47 @@ class HabitProvider with ChangeNotifier {
   }
 
   Future<void> toggleHabit(String id) async {
+    await _waitForInitialization();
+    final today = DateTime.now().toIso8601String().split('T')[0];
+    final stats = await DatabaseHelper.instance.getStats();
+    final lastDate = stats['lastDate'] as String;
+    if (lastDate != today) {
+      await _refreshDay(lastDate, today);
+    }
+
     final index = _habits.indexWhere((h) => h.id == id);
     if (index != -1) {
-      if (!_habits[index].isCompleted) {
-        _habits[index].isCompleted = true;
-        await DatabaseHelper.instance.updateHabit(_habits[index]);
-        final today = DateTime.now().toIso8601String().split('T')[0];
+      final wasCompleted = _habits[index].isCompleted;
+      _habits[index].isCompleted = !wasCompleted;
+      await DatabaseHelper.instance.updateHabit(_habits[index]);
+
+      if (!wasCompleted) {
         if (allCompleted && _lastStreakDate != today) {
           _streak++;
           _lastStreakDate = today;
-          await DatabaseHelper.instance.updateStats(_streak, today, today);
         }
-        notifyListeners();
+      } else if (_lastStreakDate == today && !allCompleted) {
+        _streak = (_streak - 1).clamp(0, _streak);
+        final yesterday = DateTime.parse(
+          today,
+        ).subtract(const Duration(days: 1));
+        _lastStreakDate = _streak == 0
+            ? ''
+            : yesterday.toIso8601String().split('T')[0];
       }
+
+      await DatabaseHelper.instance.updateStats(
+        _streak,
+        today,
+        _lastStreakDate,
+      );
+      await _syncNotifications();
+      notifyListeners();
     }
   }
 
   Future<void> reorderHabits(int oldIndex, int newIndex) async {
+    await _waitForInitialization();
     if (newIndex > oldIndex) newIndex -= 1;
     final item = _habits.removeAt(oldIndex);
     _habits.insert(newIndex, item);
@@ -114,6 +172,7 @@ class HabitProvider with ChangeNotifier {
     int oldIndex,
     int newIndex,
   ) async {
+    await _waitForInitialization();
     final groupHabits = _habits
         .where((habit) => habit.groupId == groupId)
         .toList();
@@ -139,6 +198,7 @@ class HabitProvider with ChangeNotifier {
   }
 
   Future<void> moveGroup(int oldIndex, int newIndex) async {
+    await _waitForInitialization();
     if (oldIndex < 0 || oldIndex >= _groups.length) return;
     if (newIndex > oldIndex) newIndex -= 1;
     if (newIndex < 0 || newIndex > _groups.length - 1) return;
@@ -153,15 +213,18 @@ class HabitProvider with ChangeNotifier {
   }
 
   Future<void> deleteHabit(String id) async {
+    await _waitForInitialization();
     final index = _habits.indexWhere((habit) => habit.id == id);
     if (index == -1) return;
 
     _habits.removeAt(index);
     await DatabaseHelper.instance.deleteHabit(id);
+    await _syncNotifications();
     notifyListeners();
   }
 
   Future<void> deleteGroup(String id) async {
+    await _waitForInitialization();
     final groupIndex = _groups.indexWhere((group) => group.id == id);
     if (groupIndex == -1) return;
 
@@ -174,8 +237,8 @@ class HabitProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Nueva función para actualizar solo el color
   Future<void> updateHabitColor(String id, int newColor) async {
+    await _waitForInitialization();
     final index = _habits.indexWhere((h) => h.id == id);
     if (index != -1) {
       _habits[index].colorValue = newColor;
@@ -187,11 +250,14 @@ class HabitProvider with ChangeNotifier {
   List<HabitGroup> _groups = [];
   List<HabitGroup> get groups => _groups;
 
-  // Función para crear grupo y asignar hábitos
   Future<bool> createGroup(String name, List<String> selectedHabitIds) async {
+    await _waitForInitialization();
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) return false;
+
     final newGroup = HabitGroup(
       id: DateTime.now().toString(),
-      name: name,
+      name: trimmedName,
       orderIndex: _groups.length,
     );
 
@@ -219,6 +285,9 @@ class HabitProvider with ChangeNotifier {
     String name,
     List<String> selectedHabitIds,
   ) async {
+    await _waitForInitialization();
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) return;
     final groupIndex = _groups.indexWhere((group) => group.id == groupId);
     if (groupIndex == -1) return;
 
@@ -232,13 +301,13 @@ class HabitProvider with ChangeNotifier {
       await DatabaseHelper.instance.updateHabit(habit);
     }
 
-    _groups[groupIndex].name = name;
+    _groups[groupIndex].name = trimmedName;
     await DatabaseHelper.instance.updateGroup(_groups[groupIndex]);
     notifyListeners();
   }
 
-  // 3. Función para cambiar de grupo un hábito individual (si decides hacerlo desde edición)
   Future<void> updateHabitGroup(String habitId, String newGroupId) async {
+    await _waitForInitialization();
     final index = _habits.indexWhere((h) => h.id == habitId);
     if (index != -1) {
       _habits[index].groupId = newGroupId;

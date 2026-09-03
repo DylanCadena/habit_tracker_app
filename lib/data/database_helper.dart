@@ -99,7 +99,6 @@ class DatabaseHelper {
     }
   }
 
-  // --- MÉTODOS PARA GRUPOS ---
   Future<List<HabitGroup>> readAllGroups() async {
     final db = await instance.database;
     final result = await db.query('habit_groups', orderBy: 'orderIndex ASC');
@@ -130,7 +129,6 @@ class DatabaseHelper {
     await db.delete('habit_groups', where: 'id = ?', whereArgs: [id]);
   }
 
-  // --- MÉTODOS PARA HÁBITOS (se mantienen iguales) ---
   Future<List<Habit>> readAllHabits() async {
     final db = await instance.database;
     final result = await db.query('habits', orderBy: 'orderIndex ASC');

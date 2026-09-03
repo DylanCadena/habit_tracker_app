@@ -5,9 +5,17 @@ import 'dart:math';
 import 'providers/habit_provider.dart';
 import 'models/habit.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'services/notification_service.dart';
+import 'l10n/app_strings.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await NotificationService.instance.initialize();
+    await NotificationService.instance.requestPermissions();
+  } catch (error) {
+    debugPrint('Notification setup failed: $error');
+  }
   runApp(
     ChangeNotifierProvider(
       create: (context) => HabitProvider(),
@@ -23,14 +31,19 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Streakify',
-      // Tema oscuro general
+      supportedLocales: const [Locale('es'), Locale('en')],
+      localeResolutionCallback: (locale, supportedLocales) {
+        return locale?.languageCode.toLowerCase() == 'es'
+            ? const Locale('es')
+            : const Locale('en');
+      },
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF121212), // Un negro más suave
+        scaffoldBackgroundColor: const Color(0xFF121212),
         textTheme: GoogleFonts.quicksandTextTheme(
           Theme.of(context).textTheme,
         ).apply(bodyColor: Colors.white),
       ),
-      home: const SplashScreen(), // Iniciamos con el Splash
+      home: const SplashScreen(),
     );
   }
 }
@@ -47,7 +60,6 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Espera 2 segundos y navega a la pantalla principal
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -86,7 +98,7 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-// --- HOME SCREEN Y DISEÑO DE TARJETAS ---
+// --- HOME SCREEN ---
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -155,6 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = stringsOf(context);
     final provider = context.watch<HabitProvider>();
     final completedHabits = provider.habits
         .where((habit) => habit.isCompleted)
@@ -168,7 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     Widget buildDaySelector() {
       final today = DateTime.now();
-      const weekdayLabels = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+      final weekdayLabels = strings.weekdays;
 
       return SizedBox(
         height: 78,
@@ -224,10 +237,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final cardColor = Color(habit.colorValue);
       final habitIcon = IconData(habit.iconCode, fontFamily: 'MaterialIcons');
 
-      return Container(
-        key: ValueKey(
-          '${habit.id}_${habit.name}_${habit.iconCode}_${habit.colorValue}',
-        ),
+      return AnimatedContainer(
+        key: ValueKey(habit.id),
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
         margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
           color: cardColor.withValues(
@@ -262,7 +275,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-              // Icono Dinámico del hábito
               Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
@@ -291,16 +303,24 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        _isEditMode
-                            ? 'Toca para editar'
-                            : (habit.isCompleted ? 'Completado' : 'Cada día'),
-                        style: GoogleFonts.quicksand(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                      if (_isEditMode)
+                        Text(
+                          strings.editHint,
+                          style: GoogleFonts.quicksand(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        )
+                      else if (habit.isCompleted)
+                        Text(
+                          strings.completed,
+                          style: GoogleFonts.quicksand(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -311,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      tooltip: 'Cambiar color',
+                      tooltip: strings.changeColor,
                       icon: const Icon(
                         Icons.palette,
                         color: Colors.white,
@@ -320,7 +340,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       onPressed: () => _showColorPicker(context, habit),
                     ),
                     IconButton(
-                      tooltip: 'Eliminar hábito',
+                      tooltip: strings.deleteHabit,
                       icon: const Icon(
                         Icons.delete_outline,
                         color: Colors.redAccent,
@@ -332,13 +352,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 )
               else
                 GestureDetector(
-                  onTap: habit.isCompleted
-                      ? null
-                      : () async {
-                          final prov = context.read<HabitProvider>();
-                          await prov.toggleHabit(habit.id);
-                          if (prov.allCompleted) _confettiController.play();
-                        },
+                  onTap: () async {
+                    final prov = context.read<HabitProvider>();
+                    await prov.toggleHabit(habit.id);
+                    if (prov.allCompleted) _confettiController.play();
+                  },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     width: 46,
@@ -408,7 +426,7 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Racha actual: ',
+                  strings.streak,
                   style: GoogleFonts.quicksand(
                     fontWeight: FontWeight.w600,
                     fontSize: 24,
@@ -434,7 +452,7 @@ class _HomeScreenState extends State<HomeScreen> {
           provider.habits.isEmpty
               ? Center(
                   child: Text(
-                    'No hay hábitos.\n¡Crea uno nuevo!',
+                    strings.noHabits,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.quicksand(
                       color: Colors.white54,
@@ -455,7 +473,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Hoy',
+                                  strings.today,
                                   style: GoogleFonts.quicksand(
                                     color: Colors.white,
                                     fontSize: 24,
@@ -465,8 +483,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const SizedBox(height: 3),
                                 Text(
                                   completedHabits == provider.habits.length
-                                      ? 'Todo completado'
-                                      : '$completedHabits de ${provider.habits.length} hábitos',
+                                      ? strings.allCompleted
+                                      : strings.habitsProgress(
+                                          completedHabits,
+                                          provider.habits.length,
+                                        ),
                                   style: GoogleFonts.quicksand(
                                     color: Colors.white54,
                                     fontSize: 14,
@@ -481,21 +502,35 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Stack(
                               alignment: Alignment.center,
                               children: [
-                                CircularProgressIndicator(
-                                  value: progress,
-                                  strokeWidth: 5,
-                                  backgroundColor: Colors.white12,
-                                  valueColor: const AlwaysStoppedAnimation(
-                                    Color(0xFF36D275),
-                                  ),
+                                TweenAnimationBuilder<double>(
+                                  tween: Tween<double>(end: progress),
+                                  duration: const Duration(milliseconds: 550),
+                                  curve: Curves.easeOutCubic,
+                                  builder: (context, animatedProgress, child) {
+                                    return CircularProgressIndicator(
+                                      value: animatedProgress,
+                                      strokeWidth: 5,
+                                      backgroundColor: Colors.white12,
+                                      valueColor: const AlwaysStoppedAnimation(
+                                        Color(0xFF36D275),
+                                      ),
+                                    );
+                                  },
                                 ),
-                                Text(
-                                  '${(progress * 100).round()}%',
-                                  style: GoogleFonts.quicksand(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                TweenAnimationBuilder<double>(
+                                  tween: Tween<double>(end: progress * 100),
+                                  duration: const Duration(milliseconds: 550),
+                                  curve: Curves.easeOutCubic,
+                                  builder: (context, animatedPercent, child) {
+                                    return Text(
+                                      '${animatedPercent.round()}%',
+                                      style: GoogleFonts.quicksand(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),
@@ -581,7 +616,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ),
                                         ),
                                         IconButton(
-                                          tooltip: 'Editar grupo',
+                                          tooltip: strings.editGroup,
                                           onPressed: () => _showEditGroupDialog(
                                             context,
                                             group,
@@ -592,7 +627,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ),
                                         ),
                                         IconButton(
-                                          tooltip: 'Eliminar grupo',
+                                          tooltip: strings.deleteGroup,
                                           onPressed: () => _confirmDeleteGroup(
                                             context,
                                             group,
@@ -607,19 +642,27 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                               ),
-                              if (isExpanded)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: buildHabitList(
-                                    groupHabits,
-                                    (oldIndex, newIndex) =>
-                                        provider.reorderHabitsInGroup(
-                                          group.id,
-                                          oldIndex,
-                                          newIndex,
+                              AnimatedSize(
+                                duration: const Duration(milliseconds: 280),
+                                curve: Curves.easeInOutCubic,
+                                alignment: Alignment.topCenter,
+                                child: isExpanded
+                                    ? Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 8,
                                         ),
-                                  ),
-                                ),
+                                        child: buildHabitList(
+                                          groupHabits,
+                                          (oldIndex, newIndex) =>
+                                              provider.reorderHabitsInGroup(
+                                                group.id,
+                                                oldIndex,
+                                                newIndex,
+                                              ),
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
+                              ),
                             ],
                           ),
                         );
@@ -659,7 +702,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPressed: () => setState(() => _isEditMode = false),
                 icon: const Icon(Icons.check_circle_outline),
                 label: Text(
-                  'Guardar cambios',
+                  strings.saveChanges,
                   style: GoogleFonts.quicksand(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -673,7 +716,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     : () => _showCreateGroupDialog(context, provider),
                 icon: const Icon(Icons.folder_open),
                 label: Text(
-                  'Nuevo Grupo',
+                  strings.newGroup,
                   style: GoogleFonts.quicksand(fontWeight: FontWeight.bold),
                 ),
               ),
@@ -706,6 +749,7 @@ class _HomeScreenState extends State<HomeScreen> {
     BuildContext context,
     HabitProvider provider,
   ) async {
+    final strings = stringsOf(context);
     if (_isCreatingGroup) return;
     final controller = TextEditingController();
     final selectedHabitIds = <String>[];
@@ -748,7 +792,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 subtitle: currentGroupName.isEmpty
                     ? null
                     : Text(
-                        'Actualmente en: $currentGroupName',
+                        '${strings.currentGroup} $currentGroupName',
                         style: const TextStyle(
                           color: Colors.orangeAccent,
                           fontSize: 12,
@@ -761,24 +805,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       context: dialogContext,
                       builder: (confirmContext) => AlertDialog(
                         backgroundColor: Colors.grey[900],
-                        title: const Text(
-                          'Mover hábito',
+                        title: Text(
+                          strings.moveHabit,
                           style: TextStyle(color: Colors.white),
                         ),
                         content: Text(
-                          'Este hábito ya pertenece a "$currentGroupName". ¿Quieres moverlo al nuevo grupo?',
+                          strings.moveConfirmation(currentGroupName),
                           style: const TextStyle(color: Colors.white70),
                         ),
                         actions: [
                           TextButton(
                             onPressed: () =>
                                 Navigator.pop(confirmContext, false),
-                            child: const Text('Cancelar'),
+                            child: Text(strings.cancel),
                           ),
                           TextButton(
                             onPressed: () =>
                                 Navigator.pop(confirmContext, true),
-                            child: const Text('Mover'),
+                            child: Text(strings.move),
                           ),
                         ],
                       ),
@@ -803,7 +847,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(24),
               ),
               title: Text(
-                'Crear Grupo',
+                strings.createGroup,
                 style: GoogleFonts.quicksand(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -818,8 +862,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       controller: controller,
                       style: GoogleFonts.quicksand(color: Colors.white),
                       decoration: InputDecoration(
-                        hintText: 'Nombre (Ej. Mañana, Salud)',
-                        errorText: showNameError ? 'Escribe un nombre' : null,
+                        hintText: strings.groupNameHint,
+                        errorText: showNameError ? strings.emptyName : null,
                         hintStyle: GoogleFonts.quicksand(color: Colors.white38),
                         filled: true,
                         fillColor: Colors.black26,
@@ -831,7 +875,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Selecciona los hábitos:',
+                      strings.selectHabits,
                       style: GoogleFonts.quicksand(color: Colors.white70),
                     ),
                     const SizedBox(height: 8),
@@ -839,9 +883,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: ListView(
                         children: [
                           if (freeHabits.isEmpty)
-                            const ListTile(
+                            ListTile(
                               title: Text(
-                                'No hay hábitos libres',
+                                strings.noFreeHabits,
                                 style: TextStyle(color: Colors.white54),
                               ),
                             ),
@@ -851,7 +895,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               collapsedIconColor: Colors.white70,
                               iconColor: Colors.white,
                               title: Text(
-                                'Hábitos en otros grupos (${occupiedHabits.length})',
+                                strings.habitsInOtherGroups(
+                                  occupiedHabits.length,
+                                ),
                                 style: GoogleFonts.quicksand(
                                   color: Colors.white70,
                                   fontWeight: FontWeight.w600,
@@ -871,7 +917,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext),
                   child: Text(
-                    'Cancelar',
+                    strings.cancel,
                     style: GoogleFonts.quicksand(color: Colors.white54),
                   ),
                 ),
@@ -888,7 +934,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       List<String>.from(selectedHabitIds),
                     ]);
                   },
-                  child: const Text('Guardar'),
+                  child: Text(strings.save),
                 ),
               ],
             );
@@ -914,12 +960,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- LOS MÉTODOS _showColorPicker y _showAddOrEditDialog VAN AQUÍ ABAJO ---
-
   Future<void> _showEditGroupDialog(
     BuildContext context,
     HabitGroup group,
   ) async {
+    final strings = stringsOf(context);
     final provider = context.read<HabitProvider>();
     final controller = TextEditingController(text: group.name);
     final selectedHabitIds = provider.habits
@@ -961,24 +1006,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       context: dialogContext,
                       builder: (confirmContext) => AlertDialog(
                         backgroundColor: Colors.grey[900],
-                        title: const Text(
-                          'Mover hábito',
+                        title: Text(
+                          strings.moveHabit,
                           style: TextStyle(color: Colors.white),
                         ),
-                        content: const Text(
-                          'Este hábito pertenece a otro grupo. ¿Quieres moverlo aquí?',
+                        content: Text(
+                          strings.moveConfirmation(group.name),
                           style: TextStyle(color: Colors.white70),
                         ),
                         actions: [
                           TextButton(
                             onPressed: () =>
                                 Navigator.pop(confirmContext, false),
-                            child: const Text('Cancelar'),
+                            child: Text(strings.cancel),
                           ),
                           TextButton(
                             onPressed: () =>
                                 Navigator.pop(confirmContext, true),
-                            child: const Text('Mover'),
+                            child: Text(strings.move),
                           ),
                         ],
                       ),
@@ -1005,7 +1050,7 @@ class _HomeScreenState extends State<HomeScreen> {
             return AlertDialog(
               backgroundColor: const Color(0xFF2C2C2C),
               title: Text(
-                'Editar grupo',
+                strings.editGroup,
                 style: GoogleFonts.quicksand(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -1020,8 +1065,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       controller: controller,
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
-                        hintText: 'Nombre del grupo',
-                        errorText: showNameError ? 'Escribe un nombre' : null,
+                        hintText: strings.groupName,
+                        errorText: showNameError ? strings.emptyName : null,
                         hintStyle: const TextStyle(color: Colors.white38),
                       ),
                     ),
@@ -1033,7 +1078,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (occupiedHabits.isNotEmpty)
                             ExpansionTile(
                               title: Text(
-                                'Hábitos en otros grupos (${occupiedHabits.length})',
+                                strings.habitsInOtherGroups(
+                                  occupiedHabits.length,
+                                ),
                                 style: const TextStyle(color: Colors.white70),
                               ),
                               children: occupiedHabits
@@ -1049,7 +1096,7 @@ class _HomeScreenState extends State<HomeScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancelar'),
+                  child: Text(strings.cancel),
                 ),
                 FilledButton(
                   onPressed: () async {
@@ -1066,7 +1113,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       selectedHabitIds.toList(),
                     );
                   },
-                  child: const Text('Guardar'),
+                  child: Text(strings.save),
                 ),
               ],
             );
@@ -1084,6 +1131,7 @@ class _HomeScreenState extends State<HomeScreen> {
     required String title,
     required String message,
   }) async {
+    final strings = stringsOf(context);
     return await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
@@ -1096,14 +1144,14 @@ class _HomeScreenState extends State<HomeScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancelar'),
+                child: Text(strings.cancel),
               ),
               FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: Colors.redAccent,
                 ),
                 onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Eliminar'),
+                child: Text(strings.delete),
               ),
             ],
           ),
@@ -1112,12 +1160,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _confirmDeleteHabit(BuildContext context, dynamic habit) async {
+    final strings = stringsOf(context);
     final habitProvider = context.read<HabitProvider>();
     final confirmed = await _confirmDeletion(
       context,
-      title: 'Eliminar hábito',
-      message:
-          '¿Quieres eliminar "${habit.name}"? Esta acción no se puede deshacer.',
+      title: strings.deleteHabit,
+      message: strings.deleteConfirmationHabit(habit.name),
     );
     if (confirmed && mounted) {
       await habitProvider.deleteHabit(habit.id);
@@ -1128,11 +1176,12 @@ class _HomeScreenState extends State<HomeScreen> {
     BuildContext context,
     HabitGroup group,
   ) async {
+    final strings = stringsOf(context);
     final habitProvider = context.read<HabitProvider>();
     final confirmed = await _confirmDeletion(
       context,
-      title: 'Eliminar grupo',
-      message: '¿Eliminar "${group.name}"? Sus hábitos quedarán sin grupo.',
+      title: strings.deleteGroup,
+      message: strings.deleteConfirmationGroup(group.name),
     );
     if (confirmed && mounted) {
       await habitProvider.deleteGroup(group.id);
@@ -1140,6 +1189,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showColorPicker(BuildContext context, var habit) {
+    final strings = stringsOf(context);
     // (Mantén el mismo código de _showColorPicker del paso anterior)
     showDialog(
       context: context,
@@ -1147,7 +1197,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: const Color(0xFF2C2C2C),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          'Elegir Color',
+          strings.chooseColor,
           style: GoogleFonts.quicksand(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -1188,6 +1238,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showAddOrEditDialog(BuildContext context, {var habit}) {
+    final strings = stringsOf(context);
     final controller = TextEditingController(text: habit?.name ?? '');
     final isEditing = habit != null;
     int selectedIconCode = habit?.iconCode ?? Icons.star_rounded.codePoint;
@@ -1206,7 +1257,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(24),
               ),
               title: Text(
-                isEditing ? 'Editar Hábito' : 'Nuevo Hábito',
+                isEditing ? strings.editHabit : strings.newHabit,
                 style: GoogleFonts.quicksand(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -1226,7 +1277,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontSize: 18,
                       ),
                       decoration: InputDecoration(
-                        hintText: 'Ej. Beber agua',
+                        hintText: strings.habitNameHint,
                         hintStyle: GoogleFonts.quicksand(color: Colors.white38),
                         filled: true,
                         fillColor: Colors.black26,
@@ -1239,7 +1290,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'Elige un icono:',
+                      strings.chooseIcon,
                       style: GoogleFonts.quicksand(color: Colors.white70),
                     ),
                     const SizedBox(height: 12),
@@ -1279,7 +1330,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         context.read<HabitProvider>().groups.isNotEmpty) ...[
                       const SizedBox(height: 24),
                       Text(
-                        'Grupo:',
+                        strings.groupName,
                         style: GoogleFonts.quicksand(color: Colors.white70),
                       ),
                       const SizedBox(height: 8),
@@ -1296,9 +1347,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         items: [
-                          const DropdownMenuItem<String>(
+                          DropdownMenuItem<String>(
                             value: '',
-                            child: Text('Sin grupo'),
+                            child: Text(strings.noGroup),
                           ),
                           ...context.read<HabitProvider>().groups.map(
                             (group) => DropdownMenuItem<String>(
@@ -1321,7 +1372,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: Text(
-                    'Cancelar',
+                    strings.cancel,
                     style: GoogleFonts.quicksand(
                       color: Colors.white54,
                       fontWeight: FontWeight.bold,
@@ -1340,17 +1391,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       vertical: 12,
                     ),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
+                    final habitProvider = context.read<HabitProvider>();
+                    final navigator = Navigator.of(context);
                     if (controller.text.isNotEmpty) {
                       if (isEditing) {
-                        final habitProvider = context.read<HabitProvider>();
-                        habitProvider.editHabit(
+                        await habitProvider.editHabit(
                           habit.id,
                           controller.text,
                           selectedIconCode,
                         );
                         if (selectedGroupId != habit.groupId) {
-                          habitProvider.updateHabitGroup(
+                          await habitProvider.updateHabitGroup(
                             habit.id,
                             selectedGroupId,
                           );
@@ -1359,17 +1411,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         final randomColor =
                             _cardColors[Random().nextInt(_cardColors.length)]
                                 .toARGB32();
-                        context.read<HabitProvider>().addHabit(
+                        await habitProvider.addHabit(
                           controller.text,
                           selectedIconCode,
                           colorValue: randomColor,
                         );
                       }
-                      Navigator.pop(context);
+                      navigator.pop();
                     }
                   },
                   child: Text(
-                    'Guardar',
+                    strings.save,
                     style: GoogleFonts.quicksand(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
