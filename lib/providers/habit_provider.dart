@@ -162,8 +162,8 @@ class HabitProvider with ChangeNotifier {
 
     for (int i = 0; i < _habits.length; i++) {
       _habits[i].orderIndex = i;
-      await DatabaseHelper.instance.updateHabit(_habits[i]);
     }
+    await DatabaseHelper.instance.updateHabitOrder(_habits);
     notifyListeners();
   }
 
@@ -192,8 +192,8 @@ class HabitProvider with ChangeNotifier {
     }
     for (var index = 0; index < _habits.length; index++) {
       _habits[index].orderIndex = index;
-      await DatabaseHelper.instance.updateHabit(_habits[index]);
     }
+    await DatabaseHelper.instance.updateHabitOrder(_habits);
     notifyListeners();
   }
 
@@ -207,8 +207,8 @@ class HabitProvider with ChangeNotifier {
     _groups.insert(newIndex, group);
     for (var index = 0; index < _groups.length; index++) {
       _groups[index].orderIndex = index;
-      await DatabaseHelper.instance.updateGroup(_groups[index]);
     }
+    await DatabaseHelper.instance.updateGroupOrder(_groups);
     notifyListeners();
   }
 

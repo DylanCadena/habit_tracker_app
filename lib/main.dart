@@ -503,7 +503,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Stack(
         children: [
-          provider.habits.isEmpty
+          provider.habits.isEmpty && provider.groups.isEmpty
               ? Center(
                   child: Text(
                     strings.noHabits,
@@ -536,7 +536,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 const SizedBox(height: 3),
                                 Text(
-                                  completedHabits == provider.habits.length
+                                  provider.habits.isNotEmpty &&
+                                          completedHabits ==
+                                              provider.habits.length
                                       ? strings.allCompleted
                                       : strings.habitsProgress(
                                           completedHabits,
@@ -607,13 +609,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         final groupHabits = provider.habits
                             .where((habit) => habit.groupId == group.id)
                             .toList();
-
-                        if (groupHabits.isEmpty && !_isEditMode) {
-                          return SizedBox(
-                            key: ValueKey('group_${group.id}_empty'),
-                            child: const SizedBox.shrink(),
-                          );
-                        }
 
                         final isExpanded = _expandedGroups[group.id] ?? true;
 

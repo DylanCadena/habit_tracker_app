@@ -167,6 +167,34 @@ class DatabaseHelper {
     await db.update('habits', {'isCompleted': isCompleted ? 1 : 0});
   }
 
+  Future<void> updateHabitOrder(List<Habit> habits) async {
+    final db = await instance.database;
+    await db.transaction((transaction) async {
+      for (var index = 0; index < habits.length; index++) {
+        await transaction.update(
+          'habits',
+          {'orderIndex': index},
+          where: 'id = ?',
+          whereArgs: [habits[index].id],
+        );
+      }
+    });
+  }
+
+  Future<void> updateGroupOrder(List<HabitGroup> groups) async {
+    final db = await instance.database;
+    await db.transaction((transaction) async {
+      for (var index = 0; index < groups.length; index++) {
+        await transaction.update(
+          'habit_groups',
+          {'orderIndex': index},
+          where: 'id = ?',
+          whereArgs: [groups[index].id],
+        );
+      }
+    });
+  }
+
   Future<Map<String, dynamic>> getStats() async {
     final db = await instance.database;
     final result = await db.query('stats', where: 'id = 1');
